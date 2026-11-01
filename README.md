@@ -2,7 +2,7 @@
 
 Checking a prior or a likelihood assumption usually means refitting once per alternative. Instead: **fit once, then reweight the saved MCMC draws** (Pareto-smoothed importance sampling). Pareto k̂ and the effective sample size (ESS) say when to trust the result and when to refit.
 
-This repository holds the evidence behind two notebooks proposed for [PyMC-Marketing](https://github.com/pymc-labs/pymc-marketing)'s example gallery, `mmm_prior_reweighting` and `mmm_likelihood_reweighting`. They use the model and data of PyMC-Marketing's [prior and likelihood sensitivity notebook](https://www.pymc-marketing.io/en/1.2.0/notebooks/mmm/mmm_prior_sensitivity.html). That notebook asks *which* priors the posterior is sensitive to. These ask *what the posterior becomes* under a specific alternative.
+This repository holds two notebooks proposed for [PyMC-Marketing](https://github.com/pymc-labs/pymc-marketing)'s example gallery, `mmm_prior_reweighting` and `mmm_likelihood_reweighting`, and the evidence behind them. They use the model and data of PyMC-Marketing's [prior and likelihood sensitivity notebook](https://www.pymc-marketing.io/en/1.2.0/notebooks/mmm/mmm_prior_sensitivity.html). That notebook asks *which* priors the posterior is sensitive to. These ask *what the posterior becomes* under a specific alternative.
 
 The same method for Google Meridian: [prior_sensitivity_meridian](https://github.com/hansamos/prior_sensitivity_meridian).
 
@@ -19,6 +19,19 @@ log_w = new_log_density(draws) - reference_log_density(draws)     # one number p
 log_w, k_hat = array_stats.psislw(-log_w)                         # ArviZ 1.x smooths exp(-x): negate
 w = np.exp(log_w - log_w.max()); w /= w.sum()
 new_mean = (w[:, None] * draws).sum(axis=0)                       # posterior mean under the change
+```
+
+## Notebooks
+
+| Notebook | Content |
+|---|---|
+| [mmm_prior_reweighting](notebooks/mmm_prior_reweighting.ipynb) | Priors: a new business prior checked against a refit, a sweep with no refits, a case where reweighting cannot help, and the relation to power-scaling. |
+| [mmm_likelihood_reweighting](notebooks/mmm_likelihood_reweighting.ipynb) | Likelihoods: stronger and weaker lift tests, StudentT sales noise, and combined changes. |
+
+Each runs in about 3 minutes on 6 CPU cores. They follow PyMC-Marketing's docs conventions, so the `{ref}` cross-references show as plain text on GitHub. To run them here, install the versions in `evidence/requirements.txt` and put the dataset in `data/`:
+
+```
+mkdir -p data && curl -o data/mmm_roas_data.csv https://raw.githubusercontent.com/pymc-labs/pymc-marketing/main/data/mmm_roas_data.csv
 ```
 
 ## Evidence

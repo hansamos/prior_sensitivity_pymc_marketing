@@ -5,6 +5,8 @@
 !LICENSE
 !evidence/
 !evidence/**
+!notebooks/
+!notebooks/*.ipynb
 
 # Never track, even inside evidence/
 __pycache__/
