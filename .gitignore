@@ -1,0 +1,14 @@
+# Track only the public files; everything else in this directory (local tooling, runs, logs) stays local.
+*
+!.gitignore
+!README.md
+!LICENSE
+!evidence/
+!evidence/**
+
+# Never track, even inside evidence/
+__pycache__/
+*.pyc
+*.nc
+*.npz
+.ipynb_checkpoints/

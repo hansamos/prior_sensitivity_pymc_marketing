@@ -1,0 +1,3 @@
+pymc-marketing==1.3.0
+nutpie==0.16.11
+matplotlib
