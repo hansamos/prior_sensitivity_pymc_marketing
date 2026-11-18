@@ -7,6 +7,10 @@ channel; y_sigma):
   err_median / err_max   median / worst |mean_reweighted - mean_refit| / sd_refit
   do_nothing_max         the same error if the unweighted reference posterior is used (effect size of the change)
   closer_worst           share of scenarios whose worst-quantity error is below the do-nothing one
+  err_q_max              worst error of the 5% and 95% quantiles, in refit SDs
+  sd_off_max             worst |sd_reweighted / sd_refit - 1|
+  verdict                the rule of `pymc_marketing.reweighting.psis_reweight`: refit if k-hat >= 0.7 or
+                         ESS < 400; check if k-hat >= 0.5 or ESS < 5% of the draws; otherwise use it
 Per scenario x quantity, split by whether the change moves the quantity (do-nothing error above MOVED SDs):
   reweighting helps on the quantities that move, and costs accuracy on the ones that do not once k-hat is high.
 Refits that did not converge (max r-hat > 1.01 or min bulk ESS < 400) are no ground truth: they are left
@@ -20,6 +24,7 @@ import pandas as pd
 
 K_EDGES, K_LABELS = [0.3, 0.5, 0.7, 1.0], ["<0.3", "0.3-0.5", "0.5-0.7", "0.7-1", ">=1"]
 ESS_EDGES, ESS_LABELS = [0.05, 0.2], ["<5%", "5-20%", ">20%"]
+MIN_ESS, MIN_ESS_FRACTION, N_DRAWS = 400, 0.05, 12_000  # psis_reweight defaults; 6 chains x 2000 draws
 MOVED = 0.1  # a quantity counts as moved by the change if the do-nothing error exceeds this many refit SDs
 
 
@@ -30,15 +35,29 @@ def md_table(df: pd.DataFrame, index: bool = True) -> str:
     return "\n".join([line(rows[0]), line(["---"] * len(rows[0]))] + [line(r) for r in rows[1:]])
 
 
+def verdict(r) -> str:
+    """Verdict of `psis_reweight` (r_eff = 1) from k-hat, its threshold and the ESS fraction."""
+    k, ess = r.pareto_k, r.ess_fraction * N_DRAWS
+    if (np.isfinite(k) and k >= r.k_threshold) or ess < MIN_ESS:
+        return "refit"
+    if (np.isfinite(k) and k >= 0.5) or r.ess_fraction < MIN_ESS_FRACTION:
+        return "check"
+    return "use it"
+
+
 def load(results: Path, table: str) -> pd.DataFrame:
     s = pd.read_csv(results / f"{table}_scenario_level.csv")
     q = pd.read_csv(results / f"{table}_quantity_level.csv")
+    q["err_q"] = q[["err_q05_sd", "err_q95_sd"]].max(axis=1)
+    q["sd_off"] = (q.sd_ratio - 1).abs()
     g = q.groupby("id").agg(err_median=("err_mean_sd", "median"), err_max=("err_mean_sd", "max"),
                             do_nothing_median=("err_mean_sd_none", "median"), do_nothing_max=("err_mean_sd_none", "max"),
                             split_noise=("err_mean_sd_split", "median"), ab_noise=("err_mean_sd_ab", "median"),
-                            sd_ratio=("sd_ratio", "median"))
+                            sd_ratio=("sd_ratio", "median"), err_q_max=("err_q", "max"),
+                            sd_off_max=("sd_off", "max"))
     s = s.merge(g, left_on="id", right_index=True)
     s["refit_ok"] = (s.refit_max_r_hat <= 1.01) & (s.refit_min_ess_bulk >= 400)
+    s["verdict"] = pd.Categorical(s.apply(verdict, axis=1), ["use it", "check", "refit"])
     s["k_bin"] = pd.cut(s.pareto_k, [-np.inf] + K_EDGES + [np.inf], labels=K_LABELS, right=False)
     s["ess_bin"] = pd.cut(s.ess_fraction, [0] + ESS_EDGES + [1.01], labels=ESS_LABELS, right=False)
     return s
@@ -50,6 +69,7 @@ def by_bin(s: pd.DataFrame, key: str) -> pd.DataFrame:
     out = s.groupby(key, observed=True).agg(
         n=("id", "size"), ess_median=("ess_fraction", "median"),
         err_median=("err_median", "median"), err_max_median=("err_max", "median"), err_max_p90=("err_max", p90),
+        err_q_max_median=("err_q_max", "median"), sd_off_max_median=("sd_off_max", "median"),
         do_nothing_max_median=("do_nothing_max", "median"), closer_worst=("closer", "mean"))
     return out.round(3)
 
@@ -97,11 +117,20 @@ def main():
                   f"quantity by more than {MOVED} SD (do-nothing error); `share_closer`: share of quantities where "
                   f"the reweighted mean is closer to the refit than the unweighted reference:\n")
         md.append(md_table(tq, index=False) + "\n")
+        md.append("\nBy verdict of `psis_reweight` (k-hat, ESS >= 400, ESS >= 5% for \"use it\"):\n")
+        tv = by_bin(ok, "verdict")
+        tv.to_csv(results / f"{table}_by_verdict.csv")
+        md.append(md_table(tv) + "\n")
         low = ok[ok.pareto_k < 0.7]
         md.append("\nScenarios with k-hat < 0.7, by ESS fraction:\n")
         t2 = by_bin(low, "ess_bin")
         t2.to_csv(results / f"{table}_by_ess_khat_below_0.7.csv")
         md.append(md_table(t2) + "\n")
+        rer = s[s.refit_source.str.startswith("rerun")]
+        if len(rer):
+            md.append("\nRefit A did not converge; replaced by a converged refit with another seed:\n")
+            md.append(md_table(rer[["id", "refit_source", "refit_seed", "refit_max_r_hat", "refit_min_ess_bulk"]]
+                               .round(3), index=False) + "\n")
         bad = s[~s.refit_ok]
         if len(bad):
             md.append("\nRefits that did not converge (excluded):\n")

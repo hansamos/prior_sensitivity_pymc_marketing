@@ -18,12 +18,13 @@ import arviz as az  # noqa: E402
 import pandas as pd  # noqa: E402
 
 import pmm_model  # noqa: E402
+import pymc_marketing  # noqa: E402
 import scenarios  # noqa: E402
 
 warnings.filterwarnings("ignore")
 MODEL = {"priors": "business", "likelihood": "lift"}
 KEEP = ["ROAS", "adstock_alpha", "saturation_lam", "saturation_beta", "y_sigma"]
-SEED_BASE = {"A": 10_000, "B": 20_000}
+SEED_BASE = {"A": 10_000, "B": 20_000, "C": 30_000, "D": 40_000, "E": 50_000}  # C-E: reruns of non-converged A refits
 
 p = argparse.ArgumentParser()
 p.add_argument("--table", choices=MODEL, required=True)
@@ -45,6 +46,7 @@ dt = mmm.idata
 free = [v.name for v in mmm.model.free_RVs]
 summ = az.summary(dt, var_names=free, kind="diagnostics")
 meta = dict(id=row.id, family=row.family, spec=spec, seed=seed, seconds=round(secs),
+            pymc_marketing=pymc_marketing.__version__,
             divergences=int(dt["sample_stats"]["diverging"].sum()),
             max_r_hat=float(summ["r_hat"].astype(float).max()),
             min_ess_bulk=float(summ["ess_bulk"].astype(float).min()))

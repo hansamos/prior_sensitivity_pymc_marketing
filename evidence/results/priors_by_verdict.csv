@@ -1,0 +1,4 @@
+verdict,n,ess_median,err_median,err_max_median,err_max_p90,err_q_max_median,sd_off_max_median,do_nothing_max_median,closer_worst
+use it,38,0.648,0.012,0.031,0.064,0.091,0.03,0.511,0.947
+check,19,0.085,0.029,0.082,0.304,0.278,0.097,1.158,1.0
+refit,44,0.004,0.099,0.518,1.416,1.374,0.34,3.146,1.0
